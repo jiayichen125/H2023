@@ -64,65 +64,54 @@ void AD9833_SPI_16bits_Write(uint16_t data)
 }
 
 /* =========================================================================
- * MCP41010 数字电位器（内部使用）
+ * AD9833驱动层（原 My_Driver/AD9833.c）
  * ========================================================================= */
-static void MCP41010_Write(uint8_t amp)
-{
-    uint8_t i;
-    uint16_t temp = MCP41010_WRITE_POT0 | amp;
-
-    AD9833_SPI_CS_H;
-    MCP41010_CS_L;
-
-    for (i = 0; i < 16; i++)
-    {
-        AD9833_SPI_SCK_L;
-
-        if (temp & 0x8000U)
-            AD9833_SPI_SDA_H;
-        else
-            AD9833_SPI_SDA_L;
-
-        temp <<= 1;
-
-        AD9833_SPI_SCK_H;
-
-        for (volatile uint16_t d = 0; d < 100; d++)
-        {
-            __NOP();
-        }
-    }
-
-    MCP41010_CS_H;
-}
-
-/* =========================================================================
- * AD9833驱动层（原 My_FML/ad9833.c）
- * ========================================================================= */
-void ad9833_set_amplitude(uint8_t amp)
-{
-    MCP41010_Write(amp);
-}
 
 void ad9833_init(void)
 {
-    MCP41010_CS_H;
-    AD9833_SPI_CS_H;
+    AD9833_SPI_CS1_H;
+    AD9833_SPI_CS2_H;
+
     AD9833_SPI_SCK_H;
 
     HAL_Delay(10);
 
+    uint32_t freq_word = ad9833_freq_to_word(ad9833_Freq);
+    uint16_t fre_l = (uint16_t)(ad9833_Reg_freq0 | (freq_word & AD9833_FREQ_DATA_MASK));
+    uint16_t fre_h = (uint16_t)(ad9833_Reg_freq0 | ((freq_word >> AD9833_FREQ_DATA_BITS) & AD9833_FREQ_DATA_MASK));
+
     ad9833_control_word = ad9833_Reg_control_B28 | ad9833_Sine;
-    ad9833_write_reg(ad9833_control_word | ad9833_Reg_control_Reset);
-    ad9833_set_freq_ch(ad9833_Freq, ad9833_Sine, ad9833_CH0);
+
+    /* 两片同步操作：复位 -> 同步写频率 -> 同时释放复位
+     * 要求两片共用同一 MCLK，方可保证相位对齐               */
+    ad9833_write_reg(ad9833_control_word | ad9833_Reg_control_Reset, AD9833_ALL);
+    ad9833_write_reg(fre_l, AD9833_ALL);
+    ad9833_write_reg(fre_h, AD9833_ALL);
+    ad9833_write_reg(ad9833_control_word, AD9833_ALL);  /* 同时释放复位，相位同步 */
 }
 
-void ad9833_write_reg(uint16_t value)
+void ad9833_write_reg(uint16_t value, uint16_t ch)
 {
-    MCP41010_CS_H;
-    AD9833_SPI_CS_L;
-    AD9833_SPI_16bits_Write(value);
-    AD9833_SPI_CS_H;
+    if(ch == AD9833_ALL)
+	{
+		AD9833_SPI_CS1_L;	 
+		AD9833_SPI_CS2_L;
+		AD9833_SPI_16bits_Write(value);
+		AD9833_SPI_CS1_H;
+		AD9833_SPI_CS2_H;
+	}
+	else if(ch == AD9833_CH1)
+	{
+		AD9833_SPI_CS1_L;	 
+		AD9833_SPI_16bits_Write(value);
+		AD9833_SPI_CS1_H;
+	}
+	else if(ch == AD9833_CH2)
+	{
+		AD9833_SPI_CS2_L;	 
+		AD9833_SPI_16bits_Write(value);
+		AD9833_SPI_CS2_H;
+	}
 }
 
 uint32_t ad9833_freq_to_word(uint32_t freq_hz)
@@ -141,7 +130,7 @@ void ad9833_set_waveform(uint16_t type)
 {
     ad9833_control_word &= (uint16_t)(ad9833_Reg_control_B28 | ad9833_Reg_control_FSELECT | ad9833_Reg_control_PSELECT);
     ad9833_control_word |= type;
-    ad9833_write_reg(ad9833_control_word);
+    ad9833_write_reg(ad9833_control_word, AD9833_ALL);
 }
 
 void ad9833_set_freq(uint32_t freq, uint16_t type)
@@ -166,10 +155,10 @@ void ad9833_set_freq_word(uint32_t freq_word, uint16_t type, uint8_t ch)
 
     ad9833_control_word = ad9833_Reg_control_B28 | fselect | type;
 
-    ad9833_write_reg(ad9833_control_word | ad9833_Reg_control_Reset);
-    ad9833_write_reg(freq_reg | fre_l);
-    ad9833_write_reg(freq_reg | fre_h);
-    ad9833_write_reg(ad9833_control_word);
+    ad9833_write_reg(ad9833_control_word | ad9833_Reg_control_Reset, ch);
+    ad9833_write_reg(freq_reg | fre_l, ch);
+    ad9833_write_reg(freq_reg | fre_h, ch);
+    ad9833_write_reg(ad9833_control_word, ch);
 }
 
 void ad9833_sweep_start(ad9833_sweep_t *sweep, uint32_t start_hz, uint32_t stop_hz, uint32_t step_hz, uint32_t dwell_ms, uint16_t type)
@@ -255,8 +244,65 @@ void ad9833_sweep_stop(ad9833_sweep_t *sweep)
 }
 
 /* =========================================================================
- * BLL封装层（原 My_BLL/dds.c）
+ * 两通道不同频率同步启动（初始相位均为 0）
+ * 要求两片共用同一 MCLK
+ * freq1_hz : 芯片1频率（Hz）
+ * type1    : 芯片1波形类型
+ * freq2_hz : 芯片2频率（Hz）
+ * type2    : 芯片2波形类型
  * ========================================================================= */
+void ad9833_sync_start(uint32_t freq1_hz, uint16_t type1, uint32_t freq2_hz, uint16_t type2)
+{
+    uint32_t fw1 = ad9833_freq_to_word(freq1_hz);
+    uint32_t fw2 = ad9833_freq_to_word(freq2_hz);
+
+    uint16_t ctrl1 = (uint16_t)(ad9833_Reg_control_B28 | type1);
+    uint16_t ctrl2 = (uint16_t)(ad9833_Reg_control_B28 | type2);
+
+    /* 1. 两片同时进入复位，相位累加器锁定在 0 */
+    ad9833_write_reg(ad9833_Reg_control_B28 | ad9833_Reg_control_Reset, AD9833_ALL);
+
+    /* 2. 分别写入不同频率字（复位期间不影响输出） */
+    ad9833_write_reg((uint16_t)(ad9833_Reg_freq0 | (fw1 & AD9833_FREQ_DATA_MASK)), AD9833_CH1);
+    ad9833_write_reg((uint16_t)(ad9833_Reg_freq0 | ((fw1 >> AD9833_FREQ_DATA_BITS) & AD9833_FREQ_DATA_MASK)), AD9833_CH1);
+    ad9833_write_reg((uint16_t)(ad9833_Reg_freq0 | (fw2 & AD9833_FREQ_DATA_MASK)), AD9833_CH2);
+    ad9833_write_reg((uint16_t)(ad9833_Reg_freq0 | ((fw2 >> AD9833_FREQ_DATA_BITS) & AD9833_FREQ_DATA_MASK)), AD9833_CH2);
+
+    /* 3. 分别写入正确的控制字（保持复位） */
+    ad9833_write_reg(ctrl1 | ad9833_Reg_control_Reset, AD9833_CH1);
+    ad9833_write_reg(ctrl2 | ad9833_Reg_control_Reset, AD9833_CH2);
+
+    /* 4. 释放复位：波形相同时同时释放（最佳同步）；不同时逐片释放 */
+    if (type1 == type2)
+    {
+        ad9833_write_reg(ctrl1, AD9833_ALL);
+    }
+    else
+    {
+        ad9833_write_reg(ctrl1, AD9833_CH1);
+        ad9833_write_reg(ctrl2, AD9833_CH2);
+    }
+
+    ad9833_control_word = ctrl1;
+}
+
+/* =========================================================================
+ * 仅设置两片相位寄存器，不动频率、不复位、不中断输出
+ * phase1_deg : 芯片1相位（0~360，单位度）
+ * phase2_deg : 芯片2相位（0~360，单位度）
+ * ========================================================================= */
+void ad9833_write_phase(float phase1_deg, float phase2_deg)
+{
+    uint16_t p1 = (phase1_deg <= 0.0f || phase1_deg >= 360.0f)
+                  ? 0U
+                  : (uint16_t)(phase1_deg / 360.0f * 4096.0f);
+    uint16_t p2 = (phase2_deg <= 0.0f || phase2_deg >= 360.0f)
+                  ? 0U
+                  : (uint16_t)(phase2_deg / 360.0f * 4096.0f);
+
+    ad9833_write_reg((uint16_t)(ad9833_Reg_phase0 | (p1 & 0x0FFFU)), AD9833_CH1);
+    ad9833_write_reg((uint16_t)(ad9833_Reg_phase0 | (p2 & 0x0FFFU)), AD9833_CH2);
+}
 void waveset(uint32_t Freq, uint16_t type, uint16_t ch)
 {
     ad9833_set_freq_ch(Freq, type, (uint8_t)ch);

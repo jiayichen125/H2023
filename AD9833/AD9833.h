@@ -8,12 +8,12 @@
  * ========================================================================= */
 #define AD9833_SPI_SCK_H    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_14, GPIO_PIN_SET)
 #define AD9833_SPI_SCK_L    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_14, GPIO_PIN_RESET)
-#define AD9833_SPI_SDA_H    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_SET)
-#define AD9833_SPI_SDA_L    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_RESET)
-#define AD9833_SPI_CS_H     HAL_GPIO_WritePin(GPIOH, GPIO_PIN_11, GPIO_PIN_SET)
-#define AD9833_SPI_CS_L     HAL_GPIO_WritePin(GPIOH, GPIO_PIN_11, GPIO_PIN_RESET)
-#define MCP41010_CS_H       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET)
-#define MCP41010_CS_L       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET)
+#define AD9833_SPI_SDA_H    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_11, GPIO_PIN_SET)
+#define AD9833_SPI_SDA_L    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_11, GPIO_PIN_RESET)
+#define AD9833_SPI_CS1_H     HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_SET)
+#define AD9833_SPI_CS1_L     HAL_GPIO_WritePin(GPIOH, GPIO_PIN_12, GPIO_PIN_RESET)
+#define AD9833_SPI_CS2_H      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET)
+#define AD9833_SPI_CS2_L       HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET)
 
 /* =========================================================================
  * AD9833 寄存器地址
@@ -39,10 +39,15 @@
 #define ad9833_Reg_control_MODE     (1 << 1)
 
 /* =========================================================================
- * 通道选择
+ * 通道选择（ad9833_CH0/CH1 用于内部 FREQ 寄存器选择）
  * ========================================================================= */
 #define ad9833_CH0  0
 #define ad9833_CH1  1
+
+/* 物理芯片片选（与 ad9833_CH0/CH1 数值对齐，可直接透传给 ad9833_write_reg）*/
+#define AD9833_CH1  0U   /* 物理芯片1 (CS1) */
+#define AD9833_CH2  1U   /* 物理芯片2 (CS2) */
+#define AD9833_ALL  2U   /* 两片同时写 */
 
 /* =========================================================================
  * 频率字计算常量
@@ -101,7 +106,7 @@ void AD9833_SPI_16bits_Write(uint16_t data);
 
 /* AD9833驱动层 */
 void     ad9833_init(void);
-void     ad9833_write_reg(uint16_t value);
+void     ad9833_write_reg(uint16_t value, uint16_t ch);
 void     ad9833_set_waveform(uint16_t type);
 void     ad9833_set_freq(uint32_t freq, uint16_t type);
 void     ad9833_set_freq_ch(uint32_t freq, uint16_t type, uint8_t ch);
@@ -114,6 +119,13 @@ void    ad9833_sweep_start(ad9833_sweep_t *sweep, uint32_t start_hz, uint32_t st
 void    ad9833_sweep_start_ch(ad9833_sweep_t *sweep, uint32_t start_hz, uint32_t stop_hz, uint32_t step_hz, uint32_t dwell_ms, uint16_t type, uint8_t ch);
 uint8_t ad9833_sweep_process(ad9833_sweep_t *sweep);
 void    ad9833_sweep_stop(ad9833_sweep_t *sweep);
+
+/* 两通道不同频率同步启动 */
+void ad9833_sync_start(uint32_t freq1_hz, uint16_t type1, uint32_t freq2_hz, uint16_t type2);
+/* 双通道同频异相 */
+void ad9833_set_phase(uint32_t freq_hz, uint16_t type, float phase1_deg, float phase2_deg);
+/* 仅设置相位，不动频率 */
+void ad9833_write_phase(float phase1_deg, float phase2_deg);
 
 /* BLL封装层（原 My_BLL/dds.h） */
 void waveset(uint32_t Freq, uint16_t type, uint16_t ch);

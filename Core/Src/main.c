@@ -31,6 +31,7 @@
 #include "HMI.h"
 #include "math.h"
 #include "usart_deal.h"
+#include "AD9833.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -102,6 +103,9 @@ int main(void)
   MX_ADC3_Init();
   MX_TIM3_Init();
   MX_USART1_UART_Init();
+  ad9833_init();
+  ad9833_sync_start(1000, ad9833_Sine, 10000, ad9833_Sine);
+  ad9833_write_phase(0.0f, 0.0f);
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -110,8 +114,12 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    HAL_Delay(1000);
     /* USER CODE END WHILE */
-
+    for (int i = 0; i <= 12; i++) {
+        //ad9833_write_phase(0, i * 30.0f);
+        HAL_Delay(2000);
+    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
