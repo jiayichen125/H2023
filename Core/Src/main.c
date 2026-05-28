@@ -34,6 +34,7 @@
 #include "math.h"
 #include "usart_deal.h"
 #include "AD9833.h"
+#include "log.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -121,6 +122,7 @@ int main(void)
     HAL_ADC_Start_DMA(&hadc2, (uint32_t *)ADC_UB, ADC_LEN);
     HAL_ADC_Start_DMA(&hadc3, (uint32_t *)ADC_UA, ADC_LEN);
     HAL_TIM_Base_Start(&htim3);
+    LOG_INFO("MAIN", "init done, sampling started");
     /* USER CODE END 2 */
 
     /* Infinite loop */

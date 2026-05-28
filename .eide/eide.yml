@@ -125,7 +125,7 @@ targets:
             warnings: all-warnings
           global:
             output-debug-info: enable
-            use-microLIB: false
+            use-microLIB: true
           linker:
             $outputTaskExcludes:
               - .bin
