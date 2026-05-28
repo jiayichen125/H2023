@@ -6,11 +6,8 @@ static volatile uint8_t task_measure;
 static volatile uint8_t task_sweep;
 static volatile uint8_t task_fault;
 static volatile uint8_t task_none;
-//extern volatile uint8_t ADC_Flag;
-extern void Split_ADC_Buffers(void);
-extern void Start_ADC_Capture(void);
-extern int Rs;
-extern int RL;
+extern volatile uint8_t ADC_Flag;
+
 
 
 typedef enum
@@ -114,7 +111,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void main_state(void)
 {
-    
+
 }
 
 // void Usart_Rx_Proc(void)

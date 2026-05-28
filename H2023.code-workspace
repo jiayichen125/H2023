@@ -6,6 +6,7 @@
     ],
     "settings": {
         "terminal.integrated.shellIntegration.enabled": false,
+        "clangd.path": "C:\\Program Files\\LLVM\\bin\\clangd.exe",
         "clangd.arguments": [
             "--header-insertion=never"
         ],
