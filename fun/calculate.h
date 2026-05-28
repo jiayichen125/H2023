@@ -4,6 +4,7 @@
 #include "FFT.h"
 #include "math.h"
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef enum
 {

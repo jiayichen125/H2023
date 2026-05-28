@@ -3,6 +3,8 @@
 #define ADC_LEN 1024
 #define FFT_LEN 1024
 #define PEAK_GUARD 5
+#define TRI_3RD_RATIO_THRESHOLD 0.08f
+#define TRI_5TH_RATIO_THRESHOLD 0.02f   
 extern uint16_t ADC_UA[ADC_LEN];
 extern uint16_t ADC_UB[ADC_LEN];
 extern uint16_t ADC_UC[ADC_LEN];
@@ -63,117 +65,110 @@ void wavetypedetect(float *FFT_mag, float fs, SignalInfo *A, SignalInfo *B)
     ADC_FFT_Get_Wave_Mes(B->bin, fs, &B->amp, &B->freq, 2);
 
     // 波形判断
-    uint16_t a_3_index = A->bin * 3;
-    uint16_t b_3_index = B->bin * 3;
-    uint16_t a_5_index = A->bin * 5;
-    uint16_t b_5_index = B->bin * 5;
+    uint32_t a_3_index = A->bin * 3;
+    uint32_t b_3_index = B->bin * 3;
+    uint32_t a_5_index = A->bin * 5;
+    uint32_t b_5_index = B->bin * 5;
 
-    //float a_3_ratio = FFT_mag[a_3_index] / FFT_mag[A->bin];
-    //if (a_3_ratio > 0.08f)
+    // float a_3_ratio = FFT_mag[a_3_index] / FFT_mag[A->bin];
+    // if (a_3_ratio > 0.08f)
     //{
-    //    A->type = WAVE_TRIANGLE;
-    //    B->type = WAVE_SINE;
-    //}
-    //else
+    //     A->type = WAVE_TRIANGLE;
+    //     B->type = WAVE_SINE;
+    // }
+    // else
     //{
-    //    if (B->bin * 3 < FFT_LEN / 2 && FFT_mag[b_3_index] / FFT_mag[B->bin] > 0.08f)
-    //    {
-    //        A->type = WAVE_SINE;
-    //        B->type = WAVE_TRIANGLE;
-    //    }
-    //    else
-    //    {
-    //        A->type = WAVE_SINE;
-    //        B->type = WAVE_SINE;
-    //    }
-    //}
-
-    
-    // 注：以下是我写的部分，根据题意，只有一个三角波因此判断A为三角波后B必定为正弦。而判断A为正弦后B的类型判断没写
-    if (FFT_mag[a_3_index] > 0)
+    //     if (B->bin * 3 < FFT_LEN / 2 && FFT_mag[b_3_index] / FFT_mag[B->bin] > 0.08f)
+    //     {
+    //         A->type = WAVE_SINE;
+    //         B->type = WAVE_TRIANGLE;
+    //     }
+    //     else
+    //     {
+    //         A->type = WAVE_SINE;
+    //         B->type = WAVE_SINE;
+    //     }
+    // }
+    if (a_3_index == B->bin)
     {
-        if (a_3_index == B->bin)
-        {
-            if (FFT_mag[a_5_index] > 0.0f)
-            {
-                if (FFT_mag[a_5_index] / FFT_mag[A->bin] > 0.02f)
-                {
-                    A->type = WAVE_TRIANGLE;
-                    B->type = WAVE_SINE;
-                }
-                else
-                {
-                    A->type = WAVE_SINE;
-                    // 缺少B的判断
-                }
-            }
-            else
-            {
-                A->type = WAVE_SINE;
-                // 缺少B的判断
-            }
-        }
-        else
+        if (a_5_index < FFT_LEN / 2 - 1 && FFT_mag[a_5_index] / FFT_mag[A->bin] > TRI_5TH_RATIO_THRESHOLD)
         {
             A->type = WAVE_TRIANGLE;
             B->type = WAVE_SINE;
         }
-    }
-    //此分支应当为A三次谐波幅值为零、五次谐波幅值不为零的情况，但是前面没加return所以有bug
-    else if (FFT_mag[a_5_index] > 0)
-    {
-        if (a_5_index == B->bin)
+        else
         {
-            if (FFT_mag[a_3_index] > 0.0f)
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
             {
-                //理论上在三次谐波为零情况不会进入这个分支。为了可读性高增加了这个判断。
-                if (FFT_mag[a_3_index] / FFT_mag[A->bin] > 0.08f)
-                {
-                    A->type = WAVE_TRIANGLE;
-                    B->type = WAVE_SINE;
-                }
-                else
-                {
-                    A->type = WAVE_SINE;
-                    // 缺少B的判断
-                }
+                B->type = WAVE_TRIANGLE;
             }
             else
             {
-                A->type = WAVE_SINE;
-                // 缺少B的判断
-            }
-        }
-        else if (a_5_index == B->bin * 3)
-        {
-            //理论上在三次谐波为零情况不会进入这个分支。为了可读性高增加了这个判断。
-            if (FFT_mag[a_3_index] > 0.0f)
-            {
-                if (FFT_mag[a_3_index] / FFT_mag[A->bin] > 0.08f)
-                {
-                    A->type = WAVE_TRIANGLE;
-                    B->type = WAVE_SINE;
-                }
-                else
-                {
-                    A->type = WAVE_SINE;
-                    // 缺少B的判断
-                }
-            }
-            else
-            {
-                A->type = WAVE_SINE;
-                // 缺少B的判断
+                B->type = WAVE_SINE;
             }
         }
     }
-    // A的三次谐波无幅值且五次谐波无幅值才会进入else但是前面没加return所以有bug
-    else
+    else if (a_5_index == B->bin)
     {
-        //等你补充
+        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
+    else if (a_5_index == b_3_index)
+    {
+        if (a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_5_index < FFT_LEN / 2 - 1 && FFT_mag[b_5_index] / FFT_mag[B->bin] > TRI_5TH_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
+    }
+    else{
+        if(a_3_index < FFT_LEN / 2 - 1 && FFT_mag[a_3_index] / FFT_mag[A->bin] > TRI_3RD_RATIO_THRESHOLD)
+        {
+            A->type = WAVE_TRIANGLE;
+            B->type = WAVE_SINE;
+        }
+        else
+        {
+            A->type = WAVE_SINE;
+            if (b_3_index < FFT_LEN / 2 - 1 && FFT_mag[b_3_index] / FFT_mag[B->bin] > TRI_3RD_RATIO_THRESHOLD)
+            {
+                B->type = WAVE_TRIANGLE;
+            }
+            else
+            {
+                B->type = WAVE_SINE;
+            }
+        }
     }
 }
-
 
 void test()
 {
