@@ -6,7 +6,7 @@
     ],
     "settings": {
         "terminal.integrated.shellIntegration.enabled": false,
-        "clangd.path": "C:\\Program Files\\LLVM\\bin\\clangd.exe",
+        "clangd.path": "C:\\Users\\komeiji_satori\\AppData\\Local\\Microsoft\\WinGet\\Packages\\LLVM.clangd_Microsoft.Winget.Source_8wekyb3d8bbwe\\clangd_22.1.0\\bin\\clangd.exe",
         "clangd.arguments": [
             "--header-insertion=never"
         ],
